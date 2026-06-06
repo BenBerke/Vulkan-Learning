@@ -36,6 +36,7 @@ private:
     vk::raii::Context context;
     vk::raii::Instance instance = nullptr;
 
+    vk::raii::SurfaceKHR surface = nullptr;
     vk::raii::DebugUtilsMessengerEXT debugMessenger = nullptr;
 
     vk::raii::PhysicalDevice physicalDevice = nullptr;
