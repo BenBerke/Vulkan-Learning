@@ -43,8 +43,29 @@ private:
     vk::raii::Device device = nullptr;
     vk::raii::Queue graphicsQueue = nullptr;
 
+    void createSurface() {
+        VkSurfaceKHR _surface;
+        if (glfwCreateWindowSurface(*instance, window, nullptr, &_surface) != 0)
+            throw std::runtime_error("failed to create window surface!");
+
+        surface = vk::raii::SurfaceKHR(instance, _surface);
+    }
+
     void createLogicalDevice() {
         std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
+
+        uint32_t queueIndex = ~0;
+        for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); ++qfpIndex) {
+            if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
+                    physicalDevice.getSurfaceSupportKHR(qfpIndex, *surface))
+            {
+                // found a queue family that supports both graphics and present
+                queueIndex = qfpIndex;
+                break;
+            }
+        }
+        if (queueIndex == ~0) throw std::runtime_error("Could not find a queue for graphics and present -> terminating");
+
         auto graphicsQueueFamilyProperty =
             std::ranges::find_if(queueFamilyProperties,
                 [](auto const &qfp)
@@ -238,6 +259,7 @@ private:
     void initVulkan() {
         createInstance();
         setupDebugMessenger();
+        createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
     }
