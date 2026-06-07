@@ -51,6 +51,12 @@ private:
         surface = vk::raii::SurfaceKHR(instance, _surface);
     }
 
+    vk::SurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const &availableFormats)
+    {
+        assert(!availableFormats.empty());
+        return availableFormats[0];
+    }
+
     void createLogicalDevice() {
         // 1. Check if the physical device actually supports the required swapchain extension
         std::vector<vk::ExtensionProperties> availableExtensions = physicalDevice.enumerateDeviceExtensionProperties();
@@ -75,7 +81,7 @@ private:
         }
 
         if (queueIndex == ~0) throw std::runtime_error("Could not find a queue family supporting both graphics and present -> terminating");
-        
+
         // 3. Set up queue creation using the found queueIndex
         float queuePriority = 0.5f;
         vk::DeviceQueueCreateInfo deviceQueueCreateInfo{
@@ -94,6 +100,11 @@ private:
 
         // 5. Specify extensions to enable
         std::vector<const char *> requiredDeviceExtension = {vk::KHRSwapchainExtensionName};
+
+        auto surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(*surface);
+        std::vector<vk::SurfaceFormatKHR> availableFormats = physicalDevice.getSurfaceFormatsKHR(surface);
+        std::vector<vk::PresentModeKHR> availablePresentModes = physicalDevice.getSurfacePresentModesKHR(surface);
+
 
         // 6. Create the logical device
         vk::DeviceCreateInfo deviceCreateInfo{
