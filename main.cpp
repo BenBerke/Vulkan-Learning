@@ -47,6 +47,8 @@ private:
     vk::raii::Device device = nullptr;
     vk::raii::Queue graphicsQueue = nullptr;
 
+    uint32_t queueIndex = std::numeric_limits<uint32_t>::max();
+
     vk::raii::SwapchainKHR swapChain = nullptr;
     std::vector<vk::Image> swapChainImages;
     vk::SurfaceFormatKHR   swapChainSurfaceFormat;
@@ -56,6 +58,15 @@ private:
 
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline graphicsPipeline = nullptr;
+
+    vk::raii::CommandPool commandPool = nullptr;
+
+    void createCommandPool() {
+        vk::CommandPoolCreateInfo poolInfo{.flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+                                            .queueFamilyIndex = queueIndex};
+
+        commandPool = vk::raii::CommandPool(device, poolInfo);
+    }
 
     [[nodiscard]] vk::raii::ShaderModule createShaderModule(const std::vector<char>& code) const
     {
@@ -78,7 +89,7 @@ private:
     }
 
     void createGraphicsPipeline() {
-        vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/shader.slang"));
+        vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/shader.spv"));
         vk::PipelineShaderStageCreateInfo vertShaderStageInfo
         {
             .stage = vk::ShaderStageFlagBits::eVertex,
@@ -271,7 +282,6 @@ private:
 
         // 2. Find a queue family that supports both Graphics and Presentation
         std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
-        uint32_t queueIndex = ~0;
 
         for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); ++qfpIndex) {
             if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
@@ -281,7 +291,7 @@ private:
                 }
         }
 
-        if (queueIndex == ~0) throw std::runtime_error("Could not find a queue family supporting both graphics and present -> terminating");
+        if (queueIndex == std::numeric_limits<uint32_t>::max()) throw std::runtime_error("Could not find a queue family supporting both graphics and present -> terminating");
 
         // 3. Set up queue creation using the found queueIndex
         float queuePriority = 0.5f;
@@ -485,6 +495,7 @@ private:
         createSwapchain();
         createImageViews();
         createGraphicsPipeline();
+        createCommandPool();
     }
 
     void createSwapchain() {
