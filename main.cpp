@@ -12,6 +12,7 @@
 #include <limits>
 #include <algorithm>
 #include <fstream>
+#include <queue>
 #include <string>
 
 constexpr uint32_t WIDTH = 800;
@@ -45,7 +46,7 @@ private:
 
     vk::raii::PhysicalDevice physicalDevice = nullptr;
     vk::raii::Device device = nullptr;
-    vk::raii::Queue graphicsQueue = nullptr;
+    vk::raii::Queue queue = nullptr;
 
     uint32_t queueIndex = std::numeric_limits<uint32_t>::max();
 
@@ -61,6 +62,46 @@ private:
 
     vk::raii::CommandPool commandPool = nullptr;
     vk::raii::CommandBuffer commandBuffer = nullptr;
+
+    vk::raii::Semaphore presentCompleteSemaphore = nullptr;
+    vk::raii::Semaphore renderFinishedSemaphore = nullptr;
+    vk::raii::Fence drawFence = nullptr;
+
+    void drawFrame() {
+        auto fenceResult = device.waitForFences(*drawFence, vk::True, UINT64_MAX);
+        if (fenceResult != vk::Result::eSuccess) throw std::runtime_error("Failed to wait for fence");
+        device.resetFences(*drawFence);
+
+        auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, *presentCompleteSemaphore, nullptr);
+        recordCommandBuffer(imageIndex);
+        vk::PipelineStageFlags waitDestinationStageMask( vk::PipelineStageFlagBits::eColorAttachmentOutput );
+        const vk::SubmitInfo   submitInfo{.waitSemaphoreCount   = 1,
+                                          .pWaitSemaphores      = &*presentCompleteSemaphore,
+                                          .pWaitDstStageMask    = &waitDestinationStageMask,
+                                          .commandBufferCount   = 1,
+                                          .pCommandBuffers      = &*commandBuffer,
+                                          .signalSemaphoreCount = 1,
+                                          .pSignalSemaphores    = &*renderFinishedSemaphore};
+        queue.submit(submitInfo, *drawFence);
+
+        const vk::PresentInfoKHR presentInfoKHR{
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores    = &*renderFinishedSemaphore,
+            .swapchainCount     = 1,
+            .pSwapchains        = &*swapChain,
+            .pImageIndices      = &imageIndex};
+
+        result = queue.presentKHR(presentInfoKHR);
+    }
+
+    //region setup
+
+    void createSyncObjects()
+    {
+        presentCompleteSemaphore = vk::raii::Semaphore(device, vk::SemaphoreCreateInfo());
+        renderFinishedSemaphore  = vk::raii::Semaphore(device, vk::SemaphoreCreateInfo());
+        drawFence                = vk::raii::Fence(device, {.flags = vk::FenceCreateFlagBits::eSignaled});
+    }
 
     void transition_image_layout(
         uint32_t imageIndex,
@@ -191,7 +232,7 @@ private:
     }
 
     void createCommandPool() {
-        vk::CommandPoolCreateInfo poolInfo{.flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+        const vk::CommandPoolCreateInfo poolInfo{.flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
                                             .queueFamilyIndex = queueIndex};
 
         commandPool = vk::raii::CommandPool(device, poolInfo);
@@ -457,7 +498,7 @@ private:
         device = vk::raii::Device(physicalDevice, deviceCreateInfo);
 
         // 7. Get the handle to our graphics/present queue
-        graphicsQueue = vk::raii::Queue(device, queueIndex, 0);
+        queue = vk::raii::Queue(device, queueIndex, 0);
     }
 
     void pickPhysicalDevice() {
@@ -626,6 +667,7 @@ private:
         createGraphicsPipeline();
         createCommandPool();
         createCommandBuffer();
+        createSyncObjects();
     }
 
     void createSwapchain() {
@@ -661,11 +703,12 @@ private:
         swapChain = vk::raii::SwapchainKHR(device, swapChainCreateInfo);
         swapChainImages = swapChain.getImages();
     }
-
+    //endregion
 
     void mainLoop() {
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
+            drawFrame();
         }
     }
 
@@ -676,7 +719,6 @@ private:
 };
 
 int main() {
-
     try {
         HelloTriangleApplication app;
         app.run();
